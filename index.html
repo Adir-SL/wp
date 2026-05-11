@@ -7,6 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/libheif-js@1.18.2/libheif-bundle.js"></script>
   <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dom-to-image-more@3.3.0/dist/dom-to-image-more.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -117,30 +118,30 @@
     }
 
     /* ── iPhone body ──
-       Proportions match iPhone 15 Pro: 146.6 × 70.6 mm → ratio 2.077
+       Proportions match iPhone 16: 147.6 × 71.6 mm → ratio 2.062
        Body: 304 × 632px  |  Screen inset: 5px each side → 294 × 622px
     ── */
     .iphone {
       position: relative;
       width: 304px;
       height: 632px;
-      border-radius: 54px;
-      /* Titanium Natural frame */
+      border-radius: 50px;
+      /* Polished aluminum frame (iPhone 16 standard) */
       background:
         linear-gradient(130deg,
-          rgba(255,255,255,0.13) 0%,
-          rgba(255,255,255,0.03) 30%,
-          rgba(255,255,255,0.0)  60%,
-          rgba(255,255,255,0.08) 100%
+          rgba(255,255,255,0.22) 0%,
+          rgba(255,255,255,0.06) 25%,
+          rgba(255,255,255,0.0)  55%,
+          rgba(255,255,255,0.12) 100%
         ),
-        #1e1e22;
+        #1c1c20;
       box-shadow:
-        /* inner rim top-left highlight */
-        inset 1px 1px 0 rgba(255,255,255,0.14),
+        /* inner rim top-left highlight — aluminum is shinier */
+        inset 1px 1px 0 rgba(255,255,255,0.22),
         /* inner rim bottom-right shadow */
-        inset -1px -1px 0 rgba(0,0,0,0.6),
+        inset -1px -1px 0 rgba(0,0,0,0.55),
         /* subtle outer edge */
-        0 0 0 1px rgba(255,255,255,0.06),
+        0 0 0 1px rgba(255,255,255,0.08),
         /* depth + color glow */
         0 50px 120px rgba(0,0,0,0.85),
         0 15px 40px rgba(0,0,0,0.55),
@@ -151,27 +152,28 @@
 
     /* ── Side buttons ── */
     /* All buttons share base style */
-    .btn-silent,
+    .btn-action,
     .btn-vol-up,
     .btn-vol-down,
-    .btn-power {
+    .btn-power,
+    .btn-camera-ctrl {
       position: absolute;
       border-radius: 2px;
-      background: linear-gradient(to right, #111114 0%, #2a2a2e 40%, #3a3a3e 100%);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 1px 2px rgba(0,0,0,0.8);
+      background: linear-gradient(to right, #131316 0%, #2e2e32 40%, #3e3e42 100%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 1px 2px rgba(0,0,0,0.8);
     }
-    /* Left side — silent switch */
-    .btn-silent {
+    /* Left side — Action button (replaces silent switch on iPhone 16) */
+    .btn-action {
       left: -4px;
-      top: 112px;
+      top: 108px;
       width: 4px;
-      height: 26px;
+      height: 30px;
       border-radius: 2px 0 0 2px;
     }
     /* Left side — volume up */
     .btn-vol-up {
       left: -4px;
-      top: 162px;
+      top: 158px;
       width: 4px;
       height: 52px;
       border-radius: 2px 0 0 2px;
@@ -179,7 +181,7 @@
     /* Left side — volume down */
     .btn-vol-down {
       left: -4px;
-      top: 228px;
+      top: 224px;
       width: 4px;
       height: 52px;
       border-radius: 2px 0 0 2px;
@@ -187,18 +189,27 @@
     /* Right side — power */
     .btn-power {
       right: -4px;
-      top: 192px;
+      top: 188px;
       width: 4px;
       height: 78px;
       border-radius: 0 2px 2px 0;
-      background: linear-gradient(to left, #111114 0%, #2a2a2e 40%, #3a3a3e 100%);
+      background: linear-gradient(to left, #131316 0%, #2e2e32 40%, #3e3e42 100%);
+    }
+    /* Right side — Camera Control (new on iPhone 16) */
+    .btn-camera-ctrl {
+      right: -4px;
+      top: 322px;
+      width: 4px;
+      height: 52px;
+      border-radius: 0 2px 2px 0;
+      background: linear-gradient(to left, #131316 0%, #2e2e32 40%, #3e3e42 100%);
     }
 
     /* ── Screen ── */
     .screen {
       position: absolute;
       top: 5px; left: 5px; right: 5px; bottom: 5px;
-      border-radius: 49px;
+      border-radius: 45px;
       overflow: hidden;
       background: #000;
       /* Subtle inner shadow to simulate glass depth */
@@ -284,7 +295,7 @@
     }
     .status-icons svg { display: block; fill: #fff; }
     .status-icons ion-icon { font-size: 18px; color: var(--ui-color, #fff); transition: color 0.25s; }
-    .status-wp { font-size: 15px; font-weight: 700; color: var(--ui-color, #fff); letter-spacing: -0.3px; transition: color 0.25s; }
+    .status-wp { font-size: 12px; font-weight: 400; color: var(--ui-color, #fff); letter-spacing: 0px; transition: color 0.25s; }
     .iphone { cursor: pointer; }
 
     /* ── Lock screen — date + time ── */
@@ -352,7 +363,7 @@
       justify-content: center;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
     }
-    .lock-action-btn svg { fill: #fff; display: block; }
+    .lock-action-btn svg { fill: #fff; display: block; background: transparent; }
     .lock-action-btn ion-icon { font-size: 22px; color: #fff; }
 
     .swipe-hint {
@@ -368,6 +379,10 @@
       background: rgba(255,255,255,0.5);
       border-radius: 3px;
     }
+
+    /* ── Export button ── */
+    .export-btn { margin-top: 8px; font-size: 0.78rem; padding: 6px 18px; border-radius: 8px; }
+    .export-btn:disabled { opacity: 0.5; cursor: default; transform: none !important; }
 
     /* ── Label under phone ── */
     .img-label {
@@ -560,10 +575,11 @@
       <div class="iphone">
 
         <!-- Side buttons (extend outside the frame) -->
-        <div class="btn-silent"></div>
+        <div class="btn-action"></div>
         <div class="btn-vol-up"></div>
         <div class="btn-vol-down"></div>
         <div class="btn-power"></div>
+        <div class="btn-camera-ctrl"></div>
 
         <!-- Screen -->
         <div class="screen">
@@ -608,13 +624,77 @@
         </div><!-- /screen -->
       </div><!-- /iphone -->
       <div class="img-label">${escHtml(filename)}</div>
+      <button class="btn-secondary export-btn">↓ Export PNG</button>
     `;
 
     wrap.querySelector('.iphone').addEventListener('click', () => {
       wrap.querySelector('.screen').classList.toggle('text-dark');
     });
 
+    wrap.querySelector('.export-btn').addEventListener('click', async e => {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      const orig = btn.textContent;
+      btn.textContent = 'Exporting…'; btn.disabled = true;
+      try { await exportPhone(wrap, filename); }
+      finally { btn.textContent = orig; btn.disabled = false; }
+    });
+
     return wrap;
+  }
+
+  async function exportPhone(wrap, filename) {
+    const phone = wrap.querySelector('.iphone');
+    const pad = 70;
+    const scale = 3;
+
+    // Clone phone and replace ion-icon web components with their shadow SVGs
+    const clone = phone.cloneNode(true);
+    const origIcons = Array.from(phone.querySelectorAll('ion-icon'));
+    const cloneIcons = Array.from(clone.querySelectorAll('ion-icon'));
+    origIcons.forEach((orig, i) => {
+      const svg = orig.shadowRoot && orig.shadowRoot.querySelector('svg');
+      if (!svg || !cloneIcons[i]) return;
+      const inlined = svg.cloneNode(true);
+      const cs = getComputedStyle(orig);
+      inlined.style.width = cs.width;
+      inlined.style.height = cs.height;
+      inlined.style.color = cs.color;
+      inlined.style.display = 'inline-block';
+      inlined.style.verticalAlign = 'middle';
+      inlined.style.background = 'transparent';
+      inlined.style.border = 'none';
+      inlined.style.outline = 'none';
+      if (orig.style.transform) inlined.style.transform = orig.style.transform;
+      cloneIcons[i].replaceWith(inlined);
+    });
+
+    const W = phone.offsetWidth + pad * 2;
+    const H = phone.offsetHeight + pad * 2;
+
+    const container = document.createElement('div');
+    Object.assign(container.style, {
+      position: 'fixed', left: '-99999px', top: '0',
+      width: W + 'px', height: H + 'px',
+      padding: pad + 'px', background: 'transparent',
+      overflow: 'visible'
+    });
+    container.appendChild(clone);
+    document.body.appendChild(container);
+
+    try {
+      const dataUrl = await domtoimage.toPng(container, {
+        width: W * scale,
+        height: H * scale,
+        style: { transform: `scale(${scale})`, transformOrigin: 'top left' }
+      });
+      const a = document.createElement('a');
+      a.download = filename.replace(/\.[^.]+$/, '') + '-preview.png';
+      a.href = dataUrl;
+      a.click();
+    } finally {
+      document.body.removeChild(container);
+    }
   }
 
   function escHtml(s) {
