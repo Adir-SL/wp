@@ -4,7 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Wallpaper Preview</title>
-  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/libheif-js@1.18.2/libheif-bundle.js"></script>
+  <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+  <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -266,7 +268,7 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 22px;
-      padding-top: 14px;
+      padding-top: 6px;
       z-index: 10;
     }
     .status-time {
@@ -281,6 +283,9 @@
       gap: 6px;
     }
     .status-icons svg { display: block; fill: #fff; }
+    .status-icons ion-icon { font-size: 18px; color: var(--ui-color, #fff); transition: color 0.25s; }
+    .status-wp { font-size: 15px; font-weight: 700; color: var(--ui-color, #fff); letter-spacing: -0.3px; transition: color 0.25s; }
+    .iphone { cursor: pointer; }
 
     /* ── Lock screen — date + time ── */
     .lock-content {
@@ -297,18 +302,21 @@
     .lock-date {
       font-size: 16px;
       font-weight: 400;
-      color: rgba(255,255,255,0.9);
+      color: var(--ui-color, rgba(255,255,255,0.9));
       letter-spacing: 0.1px;
       margin-bottom: 4px;
+      transition: color 0.25s;
     }
     .lock-time {
       font-size: 86px;
       font-weight: 100;
-      color: #fff;
+      color: var(--ui-color, #fff);
       letter-spacing: -5px;
       line-height: 1;
-      text-shadow: 0 2px 20px rgba(0,0,0,0.35);
+      text-shadow: var(--ui-shadow, 0 2px 20px rgba(0,0,0,0.35));
+      transition: color 0.25s, text-shadow 0.25s;
     }
+    .screen.text-dark { --ui-color: rgba(0,0,0,0.85); --ui-shadow: none; }
 
     /* ── Bottom action area ── */
     .lock-bottom {
@@ -345,6 +353,7 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
     }
     .lock-action-btn svg { fill: #fff; display: block; }
+    .lock-action-btn ion-icon { font-size: 22px; color: #fff; }
 
     .swipe-hint {
       font-size: 12px;
@@ -420,6 +429,12 @@
   const grid      = document.getElementById('grid');
   const clearBtn  = document.getElementById('clearBtn');
 
+  // libheif-js ≥1.17 exposes LibHeif() as an async WASM factory — initialise once
+  let _lh = null;
+  const _lhReady = (async () => {
+    try { _lh = await LibHeif(); } catch { /* not available */ }
+  })();
+
   function pad(n) { return String(n).padStart(2, '0'); }
 
   function getLockTime() {
@@ -455,16 +470,56 @@
   }
 
   async function toDataUrl(file) {
-    if (isHeic(file)) {
-      const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
-      const blob = Array.isArray(result) ? result[0] : result;
-      return URL.createObjectURL(blob);
+    if (!isHeic(file)) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
     }
+
+    // Always decode → canvas → JPEG blob so the result is a plain JPEG URL
+    // regardless of browser HEIC support. No file-size ceiling.
+    const canvas = document.createElement('canvas');
+    const ctx    = canvas.getContext('2d');
+
+    try {
+      // Primary: createImageBitmap uses the OS HEIC codec (Safari, Chrome on macOS/Windows).
+      const bitmap = await createImageBitmap(file);
+      canvas.width  = bitmap.width;
+      canvas.height = bitmap.height;
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
+    } catch {
+      // Fallback: libheif-js WASM (Firefox, Linux, older browsers)
+      await decodeHeicToCanvas(file, canvas, ctx);
+    }
+
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+      canvas.toBlob(
+        blob => blob ? resolve(URL.createObjectURL(blob)) : reject(new Error('JPEG export failed')),
+        'image/jpeg', 0.92
+      );
+    });
+  }
+
+  async function decodeHeicToCanvas(file, canvas, ctx) {
+    await _lhReady;
+    if (!_lh) throw new Error('libheif-js not available');
+    const data   = new Uint8Array(await file.arrayBuffer());
+    const images = new _lh.HeifDecoder().decode(data);
+    if (!images?.length) throw new Error('No images in HEIC file');
+    const img = images[0];
+    const w = img.get_width(), h = img.get_height();
+    canvas.width = w; canvas.height = h;
+    const imageData = ctx.createImageData(w, h);
+    await new Promise((resolve, reject) => {
+      img.display(imageData, result => {
+        if (!result) { reject(new Error('libheif decode failed')); return; }
+        ctx.putImageData(imageData, 0, 0);
+        resolve();
+      });
     });
   }
 
@@ -521,27 +576,11 @@
 
           <!-- Status bar -->
           <div class="status-bar">
-            <span class="status-time">${time}</span>
+            <span class="status-wp">WP</span>
             <div class="status-icons">
-              <!-- Cellular signal -->
-              <svg width="17" height="12" viewBox="0 0 17 12">
-                <rect x="0"  y="7"  width="3" height="5"  rx="0.8" opacity="1"/>
-                <rect x="4.5" y="4.5" width="3" height="7.5" rx="0.8" opacity="1"/>
-                <rect x="9"  y="2"  width="3" height="10" rx="0.8" opacity="1"/>
-                <rect x="13.5" y="0" width="3" height="12" rx="0.8" opacity="0.3"/>
-              </svg>
-              <!-- WiFi -->
-              <svg width="16" height="12" viewBox="0 0 16 12">
-                <path d="M8 9.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3z"/>
-                <path d="M8 6a4.5 4.5 0 013.18 1.32l1.06-1.06A6 6 0 008 4.5a6 6 0 00-4.24 1.76l1.06 1.06A4.5 4.5 0 018 6z"/>
-                <path d="M8 2.5A8.5 8.5 0 0114.02.98L15.08.08A10 10 0 008 0 10 10 0 00.92.08l1.06.9A8.5 8.5 0 018 2.5z" opacity="0.9"/>
-              </svg>
-              <!-- Battery -->
-              <svg width="25" height="12" viewBox="0 0 25 12">
-                <rect x="0" y="1" width="21" height="10" rx="3" stroke="rgba(255,255,255,0.35)" stroke-width="1" fill="none"/>
-                <rect x="1.5" y="2.5" width="15" height="7" rx="1.8" fill="#fff"/>
-                <path d="M22.5 4.5v3a1.5 1.5 0 000-3z" fill="rgba(255,255,255,0.4)"/>
-              </svg>
+              <ion-icon name="cellular"></ion-icon>
+              <ion-icon name="wifi"></ion-icon>
+              <ion-icon name="battery-half"></ion-icon>
             </div>
           </div>
 
@@ -556,19 +595,13 @@
             <div class="lock-actions">
               <!-- Flashlight -->
               <div class="lock-action-btn">
-                <svg width="18" height="20" viewBox="0 0 24 26">
-                  <path d="M9.5 2L8 9H4.5l7.5 15 2.5-8.5H18L9.5 2z"/>
-                </svg>
+                <ion-icon name="flashlight" style="transform:rotate(-45deg)"></ion-icon>
               </div>
               <!-- Camera -->
               <div class="lock-action-btn">
-                <svg width="20" height="18" viewBox="0 0 24 22">
-                  <path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0 8a3 3 0 110-6 3 3 0 010 6z"/>
-                  <path d="M8.5 1L6.5 4H2a2 2 0 00-2 2v14a2 2 0 002 2h20a2 2 0 002-2V6a2 2 0 00-2-2h-4.5L15.5 1H8.5z"/>
-                </svg>
+                <ion-icon name="camera"></ion-icon>
               </div>
             </div>
-            <div class="swipe-hint">Swipe up to unlock</div>
             <div class="home-indicator"></div>
           </div>
 
@@ -576,6 +609,10 @@
       </div><!-- /iphone -->
       <div class="img-label">${escHtml(filename)}</div>
     `;
+
+    wrap.querySelector('.iphone').addEventListener('click', () => {
+      wrap.querySelector('.screen').classList.toggle('text-dark');
+    });
 
     return wrap;
   }
