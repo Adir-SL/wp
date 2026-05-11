@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wallpaper Preview</title>
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080810;
+      --surface: #12121a;
+      --border: #252535;
+      --accent: #6c63ff;
+      --text: #e8e8f0;
+      --muted: #55556a;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      padding: 52px 24px 36px;
+    }
+    header h1 {
+      font-size: 2.1rem;
+      font-weight: 700;
+      letter-spacing: -0.6px;
+      background: linear-gradient(135deg, #fff 0%, #b0a8ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    /* ── Upload ── */
+    .upload-area {
+      max-width: 520px;
+      margin: 0 auto 56px;
+      padding: 0 24px;
+    }
+    .drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: 18px;
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(108, 99, 255, 0.05);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer;
+      width: 100%; height: 100%;
+    }
+    .drop-icon { font-size: 2.2rem; margin-bottom: 10px; }
+    .drop-zone h2 { font-size: 1rem; font-weight: 600; margin-bottom: 5px; }
+    .drop-zone p  { font-size: 0.83rem; color: var(--muted); }
+
+    .controls {
+      display: flex; gap: 10px;
+      margin-top: 12px; justify-content: center;
+    }
+    button {
+      padding: 9px 22px;
+      border-radius: 10px; border: none;
+      font-size: 0.85rem; font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    button:active { transform: scale(0.97); }
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    button:hover { opacity: 0.82; }
+
+    /* ── Grid ── */
+    .grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 60px 50px;
+      justify-content: center;
+      padding: 0 40px 100px;
+    }
+
+    /* ── iPhone wrap ── */
+    .iphone-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      animation: fadeUp 0.4s cubic-bezier(.22,.68,0,1.2) both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ── iPhone body ──
+       Proportions match iPhone 15 Pro: 146.6 × 70.6 mm → ratio 2.077
+       Body: 304 × 632px  |  Screen inset: 5px each side → 294 × 622px
+    ── */
+    .iphone {
+      position: relative;
+      width: 304px;
+      height: 632px;
+      border-radius: 54px;
+      /* Titanium Natural frame */
+      background:
+        linear-gradient(130deg,
+          rgba(255,255,255,0.13) 0%,
+          rgba(255,255,255,0.03) 30%,
+          rgba(255,255,255,0.0)  60%,
+          rgba(255,255,255,0.08) 100%
+        ),
+        #1e1e22;
+      box-shadow:
+        /* inner rim top-left highlight */
+        inset 1px 1px 0 rgba(255,255,255,0.14),
+        /* inner rim bottom-right shadow */
+        inset -1px -1px 0 rgba(0,0,0,0.6),
+        /* subtle outer edge */
+        0 0 0 1px rgba(255,255,255,0.06),
+        /* depth + color glow */
+        0 50px 120px rgba(0,0,0,0.85),
+        0 15px 40px rgba(0,0,0,0.55),
+        0 0 0 0.5px #000;
+      /* overflow visible so buttons extend outside */
+      overflow: visible;
+    }
+
+    /* ── Side buttons ── */
+    /* All buttons share base style */
+    .btn-silent,
+    .btn-vol-up,
+    .btn-vol-down,
+    .btn-power {
+      position: absolute;
+      border-radius: 2px;
+      background: linear-gradient(to right, #111114 0%, #2a2a2e 40%, #3a3a3e 100%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 1px 2px rgba(0,0,0,0.8);
+    }
+    /* Left side — silent switch */
+    .btn-silent {
+      left: -4px;
+      top: 112px;
+      width: 4px;
+      height: 26px;
+      border-radius: 2px 0 0 2px;
+    }
+    /* Left side — volume up */
+    .btn-vol-up {
+      left: -4px;
+      top: 162px;
+      width: 4px;
+      height: 52px;
+      border-radius: 2px 0 0 2px;
+    }
+    /* Left side — volume down */
+    .btn-vol-down {
+      left: -4px;
+      top: 228px;
+      width: 4px;
+      height: 52px;
+      border-radius: 2px 0 0 2px;
+    }
+    /* Right side — power */
+    .btn-power {
+      right: -4px;
+      top: 192px;
+      width: 4px;
+      height: 78px;
+      border-radius: 0 2px 2px 0;
+      background: linear-gradient(to left, #111114 0%, #2a2a2e 40%, #3a3a3e 100%);
+    }
+
+    /* ── Screen ── */
+    .screen {
+      position: absolute;
+      top: 5px; left: 5px; right: 5px; bottom: 5px;
+      border-radius: 49px;
+      overflow: hidden;
+      background: #000;
+      /* Subtle inner shadow to simulate glass depth */
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+    }
+
+    /* Glass sheen overlay */
+    .screen::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        145deg,
+        rgba(255,255,255,0.07) 0%,
+        rgba(255,255,255,0.02) 25%,
+        transparent 50%
+      );
+      z-index: 30;
+      pointer-events: none;
+    }
+
+    /* ── Wallpaper ── */
+    .wallpaper {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+    /* Readability gradient */
+    .wallpaper::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        180deg,
+        rgba(0,0,0,0.22) 0%,
+        rgba(0,0,0,0.04) 30%,
+        rgba(0,0,0,0.00) 55%,
+        rgba(0,0,0,0.38) 100%
+      );
+    }
+
+    /* ── Dynamic Island ── */
+    .dynamic-island {
+      position: absolute;
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100px;
+      height: 32px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 20;
+      /* subtle inner glow */
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.04), inset 0 0 8px rgba(0,0,0,0.8);
+    }
+
+    /* ── Status bar ── */
+    /* Items sit on either side of the Dynamic Island */
+    .status-bar {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 22px;
+      padding-top: 14px;
+      z-index: 10;
+    }
+    .status-time {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: -0.3px;
+    }
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-icons svg { display: block; fill: #fff; }
+
+    /* ── Lock screen — date + time ── */
+    .lock-content {
+      position: absolute;
+      top: 72px;
+      left: 0; right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      z-index: 10;
+      user-select: none;
+    }
+    .lock-date {
+      font-size: 16px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.9);
+      letter-spacing: 0.1px;
+      margin-bottom: 4px;
+    }
+    .lock-time {
+      font-size: 86px;
+      font-weight: 100;
+      color: #fff;
+      letter-spacing: -5px;
+      line-height: 1;
+      text-shadow: 0 2px 20px rgba(0,0,0,0.35);
+    }
+
+    /* ── Bottom action area ── */
+    .lock-bottom {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 130px;
+      background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 14px;
+      z-index: 10;
+    }
+
+    /* Flashlight + Camera */
+    .lock-actions {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      padding: 0 28px;
+      margin-bottom: 16px;
+    }
+    .lock-action-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.22);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    .lock-action-btn svg { fill: #fff; display: block; }
+
+    .swipe-hint {
+      font-size: 12px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 0.2px;
+      margin-bottom: 10px;
+    }
+    .home-indicator {
+      width: 118px;
+      height: 5px;
+      background: rgba(255,255,255,0.5);
+      border-radius: 3px;
+    }
+
+    /* ── Label under phone ── */
+    .img-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      max-width: 304px;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── HEIC loading placeholder ── */
+    .phone-loading .iphone {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .loading-spinner {
+      width: 34px;
+      height: 34px;
+      border: 2.5px solid rgba(255,255,255,0.1);
+      border-top-color: rgba(255,255,255,0.55);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Wallpaper Preview</h1>
+  <p>Upload images to see them as iPhone lock screen wallpapers</p>
+</header>
+
+<div class="upload-area">
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept="image/*,.heic,.heif" multiple />
+    <div class="drop-icon">🖼️</div>
+    <h2>Drop images here</h2>
+    <p>or click to browse — JPG, PNG, WEBP, HEIC</p>
+  </div>
+  <div class="controls">
+    <button class="btn-secondary" id="clearBtn">Clear all</button>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+  const dropZone  = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const grid      = document.getElementById('grid');
+  const clearBtn  = document.getElementById('clearBtn');
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function getLockTime() {
+    const now = new Date();
+    return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
+
+  function getLockDate() {
+    return new Date().toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric'
+    });
+  }
+
+  setInterval(() => {
+    const t = getLockTime(), d = getLockDate();
+    document.querySelectorAll('.lock-time').forEach(el => el.textContent = t);
+    document.querySelectorAll('.lock-date').forEach(el => el.textContent = d);
+  }, 1000);
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+  clearBtn.addEventListener('click', () => { grid.innerHTML = ''; fileInput.value = ''; });
+
+  function isHeic(file) {
+    return file.type === 'image/heic' || file.type === 'image/heif' ||
+           /\.(heic|heif)$/i.test(file.name);
+  }
+
+  async function toDataUrl(file) {
+    if (isHeic(file)) {
+      const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+      const blob = Array.isArray(result) ? result[0] : result;
+      return URL.createObjectURL(blob);
+    }
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handleFiles(files) {
+    [...files]
+      .filter(f => f.type.startsWith('image/') || isHeic(f))
+      .forEach(async file => {
+        // Insert placeholder immediately so card order matches drop order
+        const idx = grid.children.length;
+        const placeholder = document.createElement('div');
+        placeholder.className = 'iphone-wrap phone-loading';
+        placeholder.style.animationDelay = `${idx * 0.07}s`;
+        placeholder.innerHTML = `
+          <div class="iphone"><div class="loading-spinner"></div></div>
+          <div class="img-label">${escHtml(file.name)}</div>`;
+        grid.appendChild(placeholder);
+
+        try {
+          const src = await toDataUrl(file);
+          const real = buildPhoneWrap(src, file.name, idx);
+          grid.replaceChild(real, placeholder);
+        } catch (err) {
+          placeholder.querySelector('.img-label').textContent = `⚠ Could not load: ${escHtml(file.name)}`;
+          placeholder.style.opacity = '0.4';
+        }
+      });
+  }
+
+  function buildPhoneWrap(src, filename, idx) {
+    const time = getLockTime();
+    const date = getLockDate();
+
+    const wrap = document.createElement('div');
+    wrap.className = 'iphone-wrap';
+    wrap.style.animationDelay = `${idx * 0.07}s`;
+
+    wrap.innerHTML = `
+      <div class="iphone">
+
+        <!-- Side buttons (extend outside the frame) -->
+        <div class="btn-silent"></div>
+        <div class="btn-vol-up"></div>
+        <div class="btn-vol-down"></div>
+        <div class="btn-power"></div>
+
+        <!-- Screen -->
+        <div class="screen">
+
+          <!-- Wallpaper -->
+          <div class="wallpaper" style="background-image:url('${src}')"></div>
+
+          <!-- Dynamic Island -->
+          <div class="dynamic-island"></div>
+
+          <!-- Status bar -->
+          <div class="status-bar">
+            <span class="status-time">${time}</span>
+            <div class="status-icons">
+              <!-- Cellular signal -->
+              <svg width="17" height="12" viewBox="0 0 17 12">
+                <rect x="0"  y="7"  width="3" height="5"  rx="0.8" opacity="1"/>
+                <rect x="4.5" y="4.5" width="3" height="7.5" rx="0.8" opacity="1"/>
+                <rect x="9"  y="2"  width="3" height="10" rx="0.8" opacity="1"/>
+                <rect x="13.5" y="0" width="3" height="12" rx="0.8" opacity="0.3"/>
+              </svg>
+              <!-- WiFi -->
+              <svg width="16" height="12" viewBox="0 0 16 12">
+                <path d="M8 9.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3z"/>
+                <path d="M8 6a4.5 4.5 0 013.18 1.32l1.06-1.06A6 6 0 008 4.5a6 6 0 00-4.24 1.76l1.06 1.06A4.5 4.5 0 018 6z"/>
+                <path d="M8 2.5A8.5 8.5 0 0114.02.98L15.08.08A10 10 0 008 0 10 10 0 00.92.08l1.06.9A8.5 8.5 0 018 2.5z" opacity="0.9"/>
+              </svg>
+              <!-- Battery -->
+              <svg width="25" height="12" viewBox="0 0 25 12">
+                <rect x="0" y="1" width="21" height="10" rx="3" stroke="rgba(255,255,255,0.35)" stroke-width="1" fill="none"/>
+                <rect x="1.5" y="2.5" width="15" height="7" rx="1.8" fill="#fff"/>
+                <path d="M22.5 4.5v3a1.5 1.5 0 000-3z" fill="rgba(255,255,255,0.4)"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Date + Time -->
+          <div class="lock-content">
+            <div class="lock-date">${date}</div>
+            <div class="lock-time">${time}</div>
+          </div>
+
+          <!-- Bottom: actions + home indicator -->
+          <div class="lock-bottom">
+            <div class="lock-actions">
+              <!-- Flashlight -->
+              <div class="lock-action-btn">
+                <svg width="18" height="20" viewBox="0 0 24 26">
+                  <path d="M9.5 2L8 9H4.5l7.5 15 2.5-8.5H18L9.5 2z"/>
+                </svg>
+              </div>
+              <!-- Camera -->
+              <div class="lock-action-btn">
+                <svg width="20" height="18" viewBox="0 0 24 22">
+                  <path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0 8a3 3 0 110-6 3 3 0 010 6z"/>
+                  <path d="M8.5 1L6.5 4H2a2 2 0 00-2 2v14a2 2 0 002 2h20a2 2 0 002-2V6a2 2 0 00-2-2h-4.5L15.5 1H8.5z"/>
+                </svg>
+              </div>
+            </div>
+            <div class="swipe-hint">Swipe up to unlock</div>
+            <div class="home-indicator"></div>
+          </div>
+
+        </div><!-- /screen -->
+      </div><!-- /iphone -->
+      <div class="img-label">${escHtml(filename)}</div>
+    `;
+
+    return wrap;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
